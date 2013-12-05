@@ -362,7 +362,7 @@ class NGPDonationFrontend {
 									$the_names['prefix'] = $value;
 									unset($the_names[0]);
 								}
-							}, &$names);
+							}, $names);
 							
 							// Check for Suffix
 							array_walk($nameSuffixes, function($value, $key, &$the_names) {
@@ -377,7 +377,7 @@ class NGPDonationFrontend {
 									$the_names['suffix'] = $value;
 									unset($the_names[$possible_skey]);
 								}
-							}, &$names);
+							}, $names);
 							
 							// Whatever is left over, set as FirstName, MiddleName, LastName
 							if(isset($names['prefix'])) {
