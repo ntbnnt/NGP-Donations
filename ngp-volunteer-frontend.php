@@ -159,7 +159,7 @@ class NGPVolunteerFrontend {
                         // Split Name
                         $names = explode(' ', $_POST['FullName']);
                         unset($cons_data['FullName']);
-                        array_walk($names, function(&$value) {
+                        array_walk($names, function($value) {
                             $chars = "\t\n\r\0\x0B,.[]{};:\"'\x00..\x1F";
                             $value = trim($value, $chars);
                         });
@@ -170,15 +170,15 @@ class NGPVolunteerFrontend {
                             $cons_data['lastName'] = $names[1];
                         } else if(count($names)>2) {
                             // Check for Prefix
-                            array_walk($namePrefixes, function($value, $key, &$the_names) {
+                            array_walk($namePrefixes, function($value, $key, $the_names) {
                                 if(strlen($the_names[0])==strlen($value) && stripos($the_names[0], $value)!==false && isset($the_names[0])) {
                                     $the_names['prefix'] = $value;
                                     unset($the_names[0]);
                                 }
-                            }, &$names);
+                            }, $names);
                             
                             // Check for Suffix
-                            array_walk($nameSuffixes, function($value, $key, &$the_names) {
+                            array_walk($nameSuffixes, function($value, $key, $the_names) {
                                 $possible_suffix = null;
                                 foreach($the_names as $k => $v) {
                                     if(is_int($k)) {
@@ -190,7 +190,7 @@ class NGPVolunteerFrontend {
                                     $the_names['suffix'] = $value;
                                     unset($the_names[$possible_skey]);
                                 }
-                            }, &$names);
+                            }, $names);
                             
                             $names = array_merge($names);
                             if(count($names)==1) {

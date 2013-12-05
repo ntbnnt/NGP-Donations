@@ -275,7 +275,7 @@ class NGPDonationFrontend {
         return true;
     }
     
-    function trim_value(&$value, $chars=null) {
+    function trim_value($value, $chars=null) {
         if($chars)
             $value = trim($value, $chars);
         else
@@ -347,7 +347,7 @@ class NGPDonationFrontend {
                         unset($payment_data['FullName']);
                         unset($payment_data['_wp_http_referer']);
                         
-                        array_walk($names, function(&$value) {
+                        array_walk($names, function($value) {
                             $chars = "\t\n\r\0\x0B,.[]{};:\"'\x00..\x1F";
                             $value = trim($value, $chars);
                         });
@@ -358,15 +358,15 @@ class NGPDonationFrontend {
                             $payment_data['LastName'] = $names[1];
                         } else if(count($names)>2) {
                             // Check for Prefix
-                            array_walk($namePrefixes, function($value, $key, &$the_names) {
+                            array_walk($namePrefixes, function($value, $key, $the_names) {
                                 if(strlen($the_names[0])==strlen($value) && stripos($the_names[0], $value)!==false && isset($the_names[0])) {
                                     $the_names['prefix'] = $value;
                                     unset($the_names[0]);
                                 }
-                            }, &$names);
+                            }, $names);
                             
                             // Check for Suffix
-                            array_walk($nameSuffixes, function($value, $key, &$the_names) {
+                            array_walk($nameSuffixes, function($value, $key, $the_names) {
                                 $possible_suffix = null;
                                 foreach($the_names as $k => $v) {
                                     if(is_int($k)) {
@@ -378,7 +378,7 @@ class NGPDonationFrontend {
                                     $the_names['suffix'] = $value;
                                     unset($the_names[$possible_skey]);
                                 }
-                            }, &$names);
+                            }, $names);
                             
                             // Whatever is left over, set as FirstName, MiddleName, LastName
                             if(isset($names['prefix'])) {
