@@ -1,6 +1,6 @@
 <?php
 
-class NGPVolunteerFrontend {
+class NGPNewWaveSignupFrontend {
     
     // The API Key for NGP (should be a superlong string.)
     var $api_key = '';
@@ -24,7 +24,7 @@ class NGPVolunteerFrontend {
     var $been_processed = false;
     
     // The default redirect URL for the thank-you page.
-    var $redirect_url = '/thank-you-for-volunteering';
+    var $redirect_url = '/thank-you-for-signing-up';
     
     // Populated with the NGP fieldsets
     var $fieldsets = array();
@@ -37,66 +37,54 @@ class NGPVolunteerFrontend {
      * Here we populate many of the above vars from the WP options.
      */
     function __construct() {
-        $this->api_key = get_option('ngp_api_key', '');
+        $this->api_key = get_option('ngp_coo_api_key', '');
+        $this->userid = get_option('ngp_userid', '');
+        $this->campaignid = get_option('ngp_campaignid', '');
+        if(empty($this->userid) && empty($this->campaignid)) {
+            $this->campaignid = null;
+            $this->userid = null;
+            $this->api_key = get_option('ngp_api_key', '');
+        }
+        
         $this->support_phone = get_option('ngp_support_phone', '');
-        $this->redirect_url = get_option('ngp_volunteer_thanks_url', '/thank-you-for-volunteering');
+        
+        $this->redirect_url = get_option('ngp_signup_thanks_url', '/thank-you-for-signing-up');
         
         $this->fields = array(
             array(
+                'name' => 'Name',
                 'type' => 'text',
                 'slug' => 'FullName',
                 'required' => 'true',
-                'label' => 'Name',
+                'label' => 'Name'
             ),
             array(
+                'name' => 'Email',
                 'type' => 'text',
-                'slug' => 'Email',
-                'required' => 'false',
+                'slug' => 'email',
+                'required' => 'true',
                 'label' => 'Email Address'
             ),
             array(
+                'name' => 'Phone',
                 'type' => 'text',
-                'slug' => 'Phone',
-                'required' => 'false',
+                'slug' => 'phone',
+                'required' => 'true',
                 'label' => 'Phone'
             ),
             array(
+                'name' => 'Zip',
                 'type' => 'text',
-                'slug' => 'Address1',
-                'required' => 'true',
-                'label' => 'Street Address'
-            ),
-            // array(
-            //     'type' => 'text',
-            //     'slug' => 'Address2',
-            //     'required' => 'false',
-            //     'label' => 'Address (Cont.)'
-            //     'show_label' => 'false'
-            // ),
-            array(
-                'type' => 'hidden',
-                'slug' => 'City',
-                // 'required' => 'true',
-                // 'label' => 'City'
-            ),
-            array(
-                'type' => 'hidden',
-                'slug' => 'State',
-                // 'required' => 'true',
-                // 'label' => 'State',
-                // 'options' => array('AK'=>'AK','AL'=>'AL','AR'=>'AR','AZ'=>'AZ','CA'=>'CA','CO'=>'CO','CT'=>'CT','DC'=>'DC','DE'=>'DE','FL'=>'FL','GA'=>'GA','HI'=>'HI','IA'=>'IA','ID'=>'ID','IL'=>'IL','IN'=>'IN','KS'=>'KS','KY'=>'KY','LA'=>'LA','MA'=>'MA','MD'=>'MD','ME'=>'ME','MI'=>'MI','MN'=>'MN','MO'=>'MO','MS'=>'MS','MT'=>'MT','NC'=>'NC','ND'=>'ND','NE'=>'NE','NH'=>'NH','NJ'=>'NJ','NM'=>'NM','NV'=>'NV','NY'=>'NY','OH'=>'OH','OK'=>'OK','OR'=>'OR','PA'=>'PA','RI'=>'RI','SC'=>'SC','SD'=>'SD','TN'=>'TN','TX'=>'TX','UT'=>'UT','VA'=>'VA','VT'=>'VT','WA'=>'WA','WI'=>'WI','WV'=>'WV','WY'=>'WY')
-            ),
-            array(
-                'type' => 'text',
-                'slug' => 'Zip',
+                'slug' => 'zip',
                 'required' => 'true',
                 'label' => 'Zip Code'
-            ),
+            )
         );
     }
     
     /*
      * Check Configuration
+     *
      */
     function check_config() {
         global $wpdb, $ngp;
@@ -111,10 +99,39 @@ class NGPVolunteerFrontend {
     function process_form() {
         global $wpdb, $ngp;
         if($this->been_processed) { return false; exit(); }
-    
+        
+        $check_config = $this->check_config();
+        if($check_config!==true) {
+            return false;
+            exit();
+        }
+        
         if(!empty($_POST)) {
-            if(wp_verify_nonce($_POST['ngp_volunteer'], 'ngp_nonce_field')) // && $_POST['ngp_form_id']==$id
+            if(wp_verify_nonce($_POST['ngp_signup'], 'ngp_nonce_field')) // && $_POST['ngp_form_id']==$id
             {
+                if(isset($_POST['fields']) && $this->userid && $this->campaignid) {
+                    $fields = explode('|', $_POST['fields']);
+                    unset($_POST['fields']);
+                    $final_fields = array();
+                    foreach($fields as $field) {
+                        if(in_array($field, array('Name', 'Zip', 'Email', 'Phone')))
+                            $final_fields[] = $field;
+                    }
+                    foreach($this->fields as $key => $field) {
+                        if(!in_array($field['name'], $final_fields)) {
+                            unset($this->fields[$key]);
+                        }
+                    }
+                    $required = false;
+                    foreach($this->fields as $key => $field) {
+                        if($field['name']=='Phone' || $field['name']=='Email')
+                            $required = true;
+                    }
+                    
+                    if(!$required)
+                        $this->any_errors = true;
+                }
+                
                 foreach($this->fields as $key => $field) {
                     if($field['required']=='true' && (!isset($_POST[$field['slug']]) || empty($_POST[$field['slug']]))) {
                         $this->fields[$key]['error'] = true;
@@ -149,12 +166,13 @@ class NGPVolunteerFrontend {
                     if(isset($_POST['redirect_url']))
                         $this->redirect_url = $_POST['redirect_url'];
                         unset($cons_data['redirect_url']);
-                    if(isset($cons_data['ngp_volunteer'])) {
-                        unset($cons_data['ngp_volunteer']);
+                    if(isset($cons_data['ngp_signup'])) {
+                        unset($cons_data['ngp_signup']);
                     }
                     if(isset($cons_data['_wp_http_referer'])) {
                         unset($cons_data['_wp_http_referer']);
                     }
+                    
                     if(isset($_POST['FullName']) && !empty($_POST['FullName'])) {
                         // Split Name
                         $names = explode(' ', $_POST['FullName']);
@@ -164,15 +182,15 @@ class NGPVolunteerFrontend {
                             $value = trim($value, $chars);
                         });
                         if(count($names)==1) {
-                            $cons_data['lastName'] = $names[0];
+                            $cons_data['LastName'] = $names[0];
                         } else if(count($names)==2) {
-                            $cons_data['firstName'] = $names[0];
-                            $cons_data['lastName'] = $names[1];
+                            $cons_data['FirstName'] = $names[0];
+                            $cons_data['LastName'] = $names[1];
                         } else if(count($names)>2) {
                             // Check for Prefix
                             array_walk($namePrefixes, function($value, $key, &$the_names) {
                                 if(strlen($the_names[0])==strlen($value) && stripos($the_names[0], $value)!==false && isset($the_names[0])) {
-                                    $the_names['prefix'] = $value;
+                                    $the_names['Prefix'] = $value.'.';
                                     unset($the_names[0]);
                                 }
                             }, &$names);
@@ -187,44 +205,48 @@ class NGPVolunteerFrontend {
                                     }
                                 }
                                 if(strlen($possible_suffix)==strlen($key) && stripos($possible_suffix, $key)!==false) {
-                                    $the_names['suffix'] = $value;
+                                    $the_names['Suffix'] = $value;
                                     unset($the_names[$possible_skey]);
                                 }
                             }, &$names);
                             
                             $names = array_merge($names);
                             if(count($names)==1) {
-                                $cons_data['lastName'] = $names[0];
+                                $cons_data['LastName'] = $names[0];
                             } else if(count($names)==2) {
-                                $cons_data['firstName'] = $names[0];
-                                $cons_data['lastName'] = $names[1];
+                                $cons_data['FirstName'] = $names[0];
+                                $cons_data['LastName'] = $names[1];
                             } else if(count($names)==3) {
-                                $cons_data['firstName'] = $names[0];
+                                $cons_data['FirstName'] = $names[0];
                                 $cons_data['MiddleName'] = $names[1];
-                                $cons_data['lastName'] = $names[2];
+                                $cons_data['LastName'] = $names[2];
                             } else if(count($names)==4) {
-                                $cons_data['firstName'] = $names[0];
-                                $cons_data['lastName'] = $names[3];
+                                $cons_data['FirstName'] = $names[0];
+                                $cons_data['LastName'] = $names[3];
                             } else {
                                 // Otherwise, let's bail out but save everything
-                                $cons_data['firstName'] = $names[0];
+                                $cons_data['FirstName'] = $names[0];
                                 foreach($names as $namekey => $name) {
                                     if($namekey==0) {
-                                        $cons_data['firstName'] = $name;
+                                        $cons_data['FirstName'] = $name;
                                     } else {
-                                        if(!isset($cons_data['lastName'])) {
-                                            $cons_data['lastName'] = $name;
+                                        if(!isset($cons_data['LastName'])) {
+                                            $cons_data['LastName'] = $name;
                                         } else {
-                                            $cons_data['lastName'] .= ' '.$name;
+                                            $cons_data['LastName'] .= ' '.$name;
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                    require_once(dirname(__FILE__).'/NgpVolunteer.php');
-                    $volunteer = new NgpVolunteer($this->api_key, $cons_data);
-                    if($volunteer->save()) {
+                    require_once(dirname(__FILE__).'/NgpEmailSignup.php');
+                    if(isset($some_random_var)) {
+                        // Maybe there'll be JSON info here?
+                    } else {
+                        $signup = new NgpEmailSignup(array('credentials' => $this->api_key), $cons_data);
+                    }
+                    if($signup->save()) {
                         // Success!
                         // Redirect.
                         $_POST = array();
@@ -237,7 +259,7 @@ class NGPVolunteerFrontend {
                         $this->ngp_error = true;
                     }
                 }
-            } else if(!empty($_POST) && isset($_POST['ngp_volunteer']) && !wp_verify_nonce($_POST['ngp_volunteer'], 'ngp_nonce_field')) {
+            } else if(!empty($_POST) && isset($_POST['ngp_signup']) && !wp_verify_nonce($_POST['ngp_signup'], 'ngp_nonce_field')) {
                 $this->ngp_error = true;
             }
             /* else if(!empty($_POST) && $_POST['ngp_form_id']!=$id) {
@@ -254,14 +276,11 @@ class NGPVolunteerFrontend {
         global $wpdb, $ngp;
         
         extract( shortcode_atts( array(
+            'fields' => null,
+            // 'main_code' => null,
+            // 'campaign_id' => null,
             'thanks_url' => null
         ), $atts ) );
-        
-        if($thanks_url!==null) {
-            $this->redirect_url = $thanks_url;
-        }
-        // $this->main_code = $main_code;
-        // $this->campaign_id = $campaign_id;
         
         $check_config = $this->check_config();
         
@@ -270,13 +289,25 @@ class NGPVolunteerFrontend {
             exit();
         }
         
-        if(isset($fields) && !empty($fields)) {
+        if($thanks_url!==null) {
+            $this->redirect_url = $thanks_url;
+        }
+        
+        if($fields!==null && $this->userid && $this->campaignid) {
             $fields = explode('|', $fields);
             $final_fields = array();
             foreach($fields as $field) {
-                if(in_array($field, array('FullName', 'Zip', 'Email', 'Phone')))
+                if(in_array($field, array('Name', 'Zip', 'Email', 'Phone')))
                     $final_fields[] = $field;
             }
+            $custom_fields = implode('|', $final_fields);
+        } else if (!$this->userid && !$this->campaignid) {
+            unset($this->fields[2]);
+        }
+        
+        if(isset($final_fields) && !in_array('Email', $final_fields) && !in_array('Phone', $final_fields)) {
+            return 'You have to specify, at least, either the Phone or Email field.';
+            exit();
         }
         
         if(!empty($_POST)) {
@@ -505,46 +536,49 @@ class NGPVolunteerFrontend {
             }
         }
         
+        $return = '';
         if($this->any_errors) {
-            echo '<div class="errMsg ngp_alert">There were errors in your volunteer information! Please fix below and try again';
+            $return .= '<div class="errMsg ngp_alert">There were errors in your signup! Please fix below and try again';
             if(!empty($this->support_phone)) {
-                echo ' or call '.$this->support_phone;
+                $return .= ' or call '.$this->support_phone;
             }
-            echo '.</div>';
+            $return .= '.</div>';
         } else if($this->ngp_error) {
-            echo '<div class="errMsg ngp_alert">Sorry, but your submission to volunteer could not be processed. Please try again';
+            $return .= '<div class="errMsg ngp_alert">Sorry, but your signup could not be processed. Please try again';
             if(!empty($this->support_phone)) {
-                echo ' or call '.$this->support_phone;
+                $return .= ' or call '.$this->support_phone;
             }
-            echo '.</div>';
+            $return .= '.</div>';
         }
         
-        $return = '';
         if(!empty($form_fields)) {
-            $return .= '<form name="ngp_user_news" class="ngp_user_submission" id="ngp_volunteer_form" action="'.$_SERVER['REQUEST_URI'].'" method="post">';
-                if(function_exists('wp_nonce_field')) {
-                    $return .= wp_nonce_field('ngp_nonce_field', 'ngp_volunteer', true, false);
-                }
-                $return .= $form_fields;
-                if($thanks_url) {
-                    $return .= '<input type="hidden" name="redirect_url" value="'.$thanks_url.'" />';
-                }
-                $return .= '<div class="submit">
-                    <input type="submit" value="volunteer!" />
+            $return .= '<form name="ngp_user_news" class="ngp_user_submission" id="ngp_signup_form" action="'.$_SERVER['REQUEST_URI'].'" method="post">';
+            if(function_exists('wp_nonce_field')) {
+                $return .= wp_nonce_field('ngp_nonce_field', 'ngp_signup', true, false);
+            }
+            $return .= $form_fields;
+            if($thanks_url!==null) {
+                $return .= '<input type="hidden" name="redirect_url" value="'.$thanks_url.'" />';
+            }
+            if(isset($custom_fields) && $this->campaignid && $this->userid) {
+                $return .= '<input type="hidden" name="fields" value="'.$custom_fields.'" />';
+            }
+            $return .= '<div class="submit">
+                    <input type="submit" value="Signup!" />
                 </div>
             </form>';
         }
         return $return;
     }
 }
-$ngpVolunteerFrontend = new NGPVolunteerFrontend();
+$ngpSignupFrontend = new NGPSignupFrontend();
 
-function ngp_process_volunteer() {
-    global $ngpVolunteerFrontend;
-    $ngpVolunteerFrontend->process_form();
+function ngp_process_signup() {
+    global $ngpSignupFrontend;
+    $ngpSignupFrontend->process_form();
 }
 
-function ngp_show_volunteer($atts=null, $form=true) {
-    global $ngpVolunteerFrontend;
-    return $ngpVolunteerFrontend->show_form($atts=null, $form=true);
+function ngp_show_signup($atts) {
+    global $ngpSignupFrontend;
+    return $ngpSignupFrontend->show_form($atts);
 }
